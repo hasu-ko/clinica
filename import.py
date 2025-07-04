@@ -48,6 +48,76 @@ def carga_fact_citas(dw_cursor, dw_conn):
     except Error as err:
         print(f"❌ Error en Hechos_Citas: {err}")
 
+def insertar_nuevo_paciente(source_cursor, source_conn):
+    try:
+        print("=== Insertar Nuevo Paciente ===")
+
+        # Validar RUT único en la tabla Paciente
+        while True:
+            rut = input("RUT (sin puntos, con guion): ").strip()
+            source_cursor.execute("SELECT 1 FROM Paciente WHERE Rut = %s", (rut,))
+            if source_cursor.fetchone():
+                print("⚠️ Ya existe un paciente con ese RUT.")
+            else:
+                break
+
+        # Validar nombre y apellido como texto
+        def validar_texto(label):
+            while True:
+                texto = input(f"{label}: ").strip()
+                if not texto.isalpha():
+                    print(f"{label} debe contener solo letras.")
+                else:
+                    return texto
+
+        nombre = validar_texto("Nombre")
+        apellido = validar_texto("Apellido")
+
+        # Validar fecha de nacimiento
+        while True:
+            fecha_nac = input("Fecha de nacimiento (YYYY-MM-DD o YYYY/MM/DD): ")
+            try:
+                fecha_nac = fecha_nac.replace("-", "/")
+                fecha_obj = datetime.strptime(fecha_nac, '%Y/%m/%d')
+                fecha_nac_final = fecha_obj.strftime('%Y%m%d')  # formato INT
+                break
+            except ValueError:
+                print("❌ Fecha inválida.")
+
+        # Validar teléfono numérico
+        while True:
+            telefono = input("Teléfono (sólo números): ").strip()
+            if not telefono.isdigit():
+                print("❌ Teléfono inválido.")
+            else:
+                break
+
+        # Dirección libre
+        direccion = input("Dirección: ").strip()
+
+        # Insertar en Persona
+        source_cursor.execute("""
+            INSERT INTO Persona (Nombre, Apellido, Fecha_nacimiento, Telefono)
+            VALUES (%s, %s, %s, %s)
+        """, (nombre, apellido, fecha_nac_final, telefono))
+        source_conn.commit()
+
+        # Obtener ID_Persona recién creada
+        source_cursor.execute("SELECT LAST_INSERT_ID()")
+        id_persona = source_cursor.fetchone()[0]
+
+        # Insertar en Paciente con el RUT
+        source_cursor.execute("""
+            INSERT INTO Paciente (Direccion, ID_Persona, Rut)
+            VALUES (%s, %s, %s)
+        """, (direccion, id_persona, rut))
+        source_conn.commit()
+
+        print("✅ Paciente insertado correctamente.")
+
+    except Error as e:
+        print(f"❌ Error al insertar paciente: {e}")
+
 def insertar_nueva_cita(source_cursor, source_conn):
     try:
         print("=== Insertar Nueva Cita ===")
@@ -170,11 +240,14 @@ def main():
         print(f"Conectado a la base: {source_conn.database}")
         print("=== Menú de Opciones ===")
         print("1. Insertar nueva cita")
-        print("2. Solo actualizar DW")
+        print("2. Insertar nuevo paciente")
+        print("3. Solo actualizar DW")
         opcion = input("Elige una opción (1/2): ")
 
         if opcion == "1":
             insertar_nueva_cita(source_cursor, source_conn)
+        elif opcion == "2":
+            insertar_nuevo_paciente(source_cursor, source_conn)
 
         # Carga de dimensiones y hechos
         ejecutar_query(dw_cursor, """

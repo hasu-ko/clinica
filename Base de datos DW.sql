@@ -41,7 +41,6 @@ CREATE TABLE Hechos_Citas (
     ficha_id INT,
     fecha_id INT,
     tratamiento_id INT,
-    duracion_min INT,
     costo INT,
     estado ENUM('agendada', 'completada', 'cancelada', 'no_asistio'),
     motivo VARCHAR(255),
@@ -126,7 +125,7 @@ SELECT DISTINCT Estado FROM clinica_db.Cita;
 
 INSERT INTO Hechos_Citas (
     cita_id, paciente_id, doctor_id, fecha_id, ficha_id, tratamiento_id,
-    duracion_min, costo, estado, motivo
+    costo, estado, motivo
 )
 SELECT
     c.ID_Cita,
@@ -134,9 +133,12 @@ SELECT
     c.ID_Doctor,
     c.Fecha AS fecha_id,
     c.ID_Ficha_Consulta,
-    MIN(t.ID_Tratamientos),
-    NULL,
-    COALESCE(SUM(f.Monto), 0),
+    COALESCE(
+        (SELECT MIN(t.ID_Tratamientos) 
+         FROM clinica_db.Tratamientos t 
+         WHERE t.Doctores_ID_Doctor = c.ID_Doctor
+         LIMIT 1),
+    0,
     CASE
         WHEN LOWER(c.Estado) = 'atendida' THEN 'completada'
         WHEN LOWER(c.Estado) = 'pendiente' THEN 'agendada'
@@ -146,12 +148,9 @@ SELECT
     c.Motivo
 FROM clinica_db.Cita c
 JOIN clinica_db.Ficha_Consulta fc ON fc.ID_Ficha_Consulta = c.ID_Ficha_Consulta
-JOIN clinica_db.Paciente p ON p.ID_Paciente = fc.ID_Paciente
 LEFT JOIN clinica_db.Facturas f ON f.Doctores_ID_Doctor = c.ID_Doctor
-LEFT JOIN clinica_db.Tratamientos t ON t.Doctores_ID_Doctor = c.ID_Doctor
 GROUP BY c.ID_Cita, fc.ID_Paciente, c.ID_Doctor, c.Fecha, c.ID_Ficha_Consulta, c.Estado, c.Motivo
 ON DUPLICATE KEY UPDATE
-    duracion_min = VALUES(duracion_min),
     costo = VALUES(costo),
     estado = VALUES(estado),
     motivo = VALUES(motivo),
@@ -229,7 +228,6 @@ SELECT
     CONCAT(dd.nombre, ' ', dd.apellido) AS 'Doctor',
     dd.especialidad AS 'Especialidad',
     dt.fecha AS 'Fecha Cita',
-    hc.duracion_min AS 'Duración (min)',
     hc.costo AS 'Costo',
     hc.estado AS 'Estado',
     hc.motivo AS 'Motivo',
@@ -247,5 +245,23 @@ LEFT JOIN
 ORDER BY 
     dt.fecha DESC
 LIMIT 0, 1000;
-    
+
 select * from resumen_eficiencia_medica;
+
+
+SELECT
+    paciente_id AS 'ID Paciente',
+    rut AS 'RUT',
+    CONCAT(nombre, ' ', apellido) AS 'Nombre Completo',
+    fecha_nacimiento AS 'Fecha de Nacimiento',
+    TIMESTAMPDIFF(YEAR, fecha_nacimiento, CURDATE()) AS 'Edad',
+    direccion AS 'Dirección',
+    ciudad AS 'Ciudad',
+    telefono AS 'Teléfono',
+    email AS 'Email',
+    fecha_registro AS 'Fecha de Registro',
+    estado AS 'Estado'
+FROM
+    Dim_Paciente
+ORDER BY
+    apellido, nombre;
