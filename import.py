@@ -49,75 +49,128 @@ def carga_fact_citas(dw_cursor, dw_conn):
     except Error as err:
         print(f"❌ Error en Hechos_Citas: {err}")
 
+def validar_rut(rut):
+    """
+    Valida que el RUT chileno tenga guion obligatorio y dígito verificador correcto.
+    Formato esperado: XXXXXXXX-Y (donde Y puede ser número o 'K')
+    """
+    rut = rut.upper()
+    # Validar formato con guion obligatorio: números + guion + dígito verificador
+    if not re.match(r'^\d{7,8}-[0-9K]$', rut):
+        return False
+
+    cuerpo, dv = rut.split('-')
+
+    suma = 0
+    multiplicador = 2
+    for c in reversed(cuerpo):
+        suma += int(c) * multiplicador
+        multiplicador += 1
+        if multiplicador > 7:
+            multiplicador = 2
+
+    resto = suma % 11
+    dv_calculado = 11 - resto
+    if dv_calculado == 11:
+        dv_calculado = '0'
+    elif dv_calculado == 10:
+        dv_calculado = 'K'
+    else:
+        dv_calculado = str(dv_calculado)
+
+    return dv == dv_calculado
+
 def insertar_nuevo_paciente(source_cursor, source_conn):
-    try:
-        print("=== Insertar Nuevo Paciente ===")
+    while True:
+        try:
+            print("\n=== Insertar Nuevo Paciente ===")
 
-        # Validar RUT único en la tabla Paciente
-        while True:
-            rut = input("RUT (sin puntos, con guion): ").strip()
-            source_cursor.execute("SELECT 1 FROM Paciente WHERE Rut = %s", (rut,))
-            if source_cursor.fetchone():
-                print("⚠️ Ya existe un paciente con ese RUT.")
-            else:
-                break
-
-        # Validar nombre y apellido como texto
-        def validar_texto(label):
+            # Validar RUT único en la tabla Paciente y formato RUT chileno válido
             while True:
-                texto = input(f"{label}: ").strip()
-                if not texto.isalpha():
-                    print(f"{label} debe contener solo letras.")
+                rut = input("RUT (sin puntos, con guion, ejemplo 12345678-5): ").strip()
+                if not validar_rut(rut):
+                    print("❌ RUT inválido. Formato incorrecto o dígito verificador no coincide.")
+                    continue
+                source_cursor.execute("SELECT 1 FROM Paciente WHERE Rut = %s", (rut,))
+                if source_cursor.fetchone():
+                    print("⚠️ Ya existe un paciente con ese RUT.")
                 else:
-                    return texto
+                    break
 
-        nombre = validar_texto("Nombre")
-        apellido = validar_texto("Apellido")
+            # Validar nombre y apellido como texto
+            def validar_texto(label):
+                while True:
+                    texto = input(f"{label}: ").strip()
+                    if not texto.isalpha():
+                        print(f"{label} debe contener solo letras.")
+                    else:
+                        return texto
 
-        # Validar fecha de nacimiento
-        while True:
-            fecha_nac = input("Fecha de nacimiento (YYYY-MM-DD o YYYY/MM/DD): ")
-            try:
-                fecha_nac = fecha_nac.replace("-", "/")
-                fecha_obj = datetime.strptime(fecha_nac, '%Y/%m/%d')
-                fecha_nac_final = fecha_obj.strftime('%Y%m%d')  # formato INT
+            nombre = validar_texto("Nombre")
+            apellido = validar_texto("Apellido")
+
+            # Validar fecha de nacimiento
+            while True:
+                fecha_nac = input("Fecha de nacimiento (YYYY-MM-DD o YYYY/MM/DD): ")
+                try:
+                    fecha_nac = fecha_nac.replace("-", "/")
+                    fecha_obj = datetime.strptime(fecha_nac, '%Y/%m/%d')
+                    fecha_nac_final = fecha_obj.strftime('%Y%m%d')  # formato INT
+                    break
+                except ValueError:
+                    print("❌ Fecha inválida.")
+
+            # Validar teléfono numérico
+            while True:
+                telefono = input("Teléfono (ej: +56912345678 o 912345678): ").strip()
+                telefono = telefono.replace(" ", "").replace("-", "")
+                numero = telefono[3:] if telefono.startswith("+56") else telefono
+
+                if not numero.isdigit():
+                    print("❌ Teléfono inválido. Debe contener solo números.")
+                    continue
+                if len(numero) < 9 or not numero.startswith("9"):
+                    print("❌ Teléfono inválido. Debe tener al menos 9 dígitos y comenzar con 9.")
+                    continue
                 break
-            except ValueError:
-                print("❌ Fecha inválida.")
 
-        # Validar teléfono numérico
+            # Dirección libre
+            direccion = input("Dirección: ").strip()
+
+            # Insertar en Persona
+            source_cursor.execute("""
+                INSERT INTO Persona (Nombre, Apellido, Fecha_nacimiento, Telefono)
+                VALUES (%s, %s, %s, %s)
+            """, (nombre, apellido, fecha_nac_final, telefono))
+            source_conn.commit()
+
+            # Obtener ID_Persona recién creada
+            source_cursor.execute("SELECT LAST_INSERT_ID()")
+            id_persona = source_cursor.fetchone()[0]
+
+            # Insertar en Paciente con el RUT
+            source_cursor.execute("""
+                INSERT INTO Paciente (Direccion, ID_Persona, Rut)
+                VALUES (%s, %s, %s)
+            """, (direccion, id_persona, rut))
+            source_conn.commit()
+
+            print("✅ Paciente insertado correctamente.")
+
+        except Error as e:
+            print(f"❌ Error al insertar paciente: {e}")
+
+        # Preguntar si desea insertar otro paciente
         while True:
-            telefono = input("Teléfono (sólo números): ").strip()
-            if not telefono.isdigit():
-                print("❌ Teléfono inválido.")
+            continuar = input("🔁 ¿Deseas ingresar otro paciente? (sí/no): ").strip().lower()
+            if continuar in ['sí', 'si', 's']:
+                break  # Repite el ciclo principal
+            elif continuar in ['no', 'n']:
+                print("🔙 Volviendo al menú principal...")
+                return
             else:
-                break
+                print("❌ Opción no válida. Escribe 'sí' o 'no'.")
 
-        # Dirección libre
-        direccion = input("Dirección: ").strip()
-
-        # Insertar en Persona
-        source_cursor.execute("""
-            INSERT INTO Persona (Nombre, Apellido, Fecha_nacimiento, Telefono)
-            VALUES (%s, %s, %s, %s)
-        """, (nombre, apellido, fecha_nac_final, telefono))
-        source_conn.commit()
-
-        # Obtener ID_Persona recién creada
-        source_cursor.execute("SELECT LAST_INSERT_ID()")
-        id_persona = source_cursor.fetchone()[0]
-
-        # Insertar en Paciente con el RUT
-        source_cursor.execute("""
-            INSERT INTO Paciente (Direccion, ID_Persona, Rut)
-            VALUES (%s, %s, %s)
-        """, (direccion, id_persona, rut))
-        source_conn.commit()
-
-        print("✅ Paciente insertado correctamente.")
-
-    except Error as e:
-        print(f"❌ Error al insertar paciente: {e}")
 
 def insertar_nueva_cita(source_cursor, source_conn):
     while True:
@@ -356,11 +409,4 @@ def main():
         print("Conexiones cerradas.")
 
 if __name__ == "__main__":
-
-
-
-
-
-
-    ###este es el verdadero
     main()

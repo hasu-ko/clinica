@@ -133,12 +133,8 @@ SELECT
     c.ID_Doctor,
     c.Fecha AS fecha_id,
     c.ID_Ficha_Consulta,
-    COALESCE(
-        (SELECT MIN(t.ID_Tratamientos) 
-         FROM clinica_db.Tratamientos t 
-         WHERE t.Doctores_ID_Doctor = c.ID_Doctor
-         LIMIT 1),
-    0,
+    MIN(t.ID_Tratamientos),
+    COALESCE(SUM(f.Monto), 0),
     CASE
         WHEN LOWER(c.Estado) = 'atendida' THEN 'completada'
         WHEN LOWER(c.Estado) = 'pendiente' THEN 'agendada'
@@ -148,8 +144,18 @@ SELECT
     c.Motivo
 FROM clinica_db.Cita c
 JOIN clinica_db.Ficha_Consulta fc ON fc.ID_Ficha_Consulta = c.ID_Ficha_Consulta
+JOIN clinica_db.Paciente p ON p.ID_Paciente = fc.ID_Paciente
 LEFT JOIN clinica_db.Facturas f ON f.Doctores_ID_Doctor = c.ID_Doctor
-GROUP BY c.ID_Cita, fc.ID_Paciente, c.ID_Doctor, c.Fecha, c.ID_Ficha_Consulta, c.Estado, c.Motivo
+LEFT JOIN clinica_db.Tratamientos t ON t.Doctores_ID_Doctor = c.ID_Doctor
+WHERE c.ID_Cita <> 0  -- Excluir ID 0
+GROUP BY 
+    c.ID_Cita, 
+    fc.ID_Paciente, 
+    c.ID_Doctor, 
+    c.Fecha, 
+    c.ID_Ficha_Consulta, 
+    c.Estado, 
+    c.Motivo
 ON DUPLICATE KEY UPDATE
     costo = VALUES(costo),
     estado = VALUES(estado),
@@ -248,20 +254,16 @@ LIMIT 0, 1000;
 
 select * from resumen_eficiencia_medica;
 
-
-SELECT
+SELECT 
     paciente_id AS 'ID Paciente',
     rut AS 'RUT',
-    CONCAT(nombre, ' ', apellido) AS 'Nombre Completo',
+    nombre AS 'Nombre',
+    apellido AS 'Apellido',
     fecha_nacimiento AS 'Fecha de Nacimiento',
-    TIMESTAMPDIFF(YEAR, fecha_nacimiento, CURDATE()) AS 'Edad',
     direccion AS 'Dirección',
-    ciudad AS 'Ciudad',
-    telefono AS 'Teléfono',
-    email AS 'Email',
-    fecha_registro AS 'Fecha de Registro',
-    estado AS 'Estado'
-FROM
-    Dim_Paciente
-ORDER BY
-    apellido, nombre;
+    telefono AS 'Teléfono'
+FROM clinica_dw_test.Dim_Paciente;
+
+
+SELECT * FROM clinica_db.Cita WHERE ID_Cita = 0;
+

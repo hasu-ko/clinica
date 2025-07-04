@@ -4,11 +4,11 @@ use clinica_db;
 
 -- Tabla de Persona
 CREATE TABLE Persona (
-    ID_Persona INT PRIMARY KEY,
-    Nombre VARCHAR(20),
+    ID_Persona INT PRIMARY KEY AUTO_INCREMENT,
+    Nombre VARCHAR(50),
     Apellido VARCHAR(50),
-    Fecha_nacimiento INTEGER,
-    Telefono INTEGER
+    Fecha_nacimiento DATE,
+    Telefono VARCHAR(20)
 );
 
 -- Tabla Doctores
@@ -47,8 +47,8 @@ CREATE TABLE Cita (
 
 -- Tabla Paciente
 CREATE TABLE Paciente (
-    ID_Paciente INTEGER PRIMARY KEY,
-    Rut INTEGER,
+    ID_Paciente INTEGER PRIMARY KEY AUTO_INCREMENT,
+    Rut VARCHAR(12),  -- usa VARCHAR si validas RUT con guión
     Direccion VARCHAR(100),
     ID_Cita INTEGER,
     ID_Persona INTEGER,
@@ -56,7 +56,6 @@ CREATE TABLE Paciente (
     FOREIGN KEY (ID_Persona) REFERENCES Persona(ID_Persona)
 );
 
- select * from cita;
  
 
 -- Tabla Facturas
@@ -278,5 +277,17 @@ JOIN Medicamentos m ON fc.ID_Ficha_Consulta = m.Ficha_Consulta_ID_Ficha_Consulta
 JOIN Tratamiento_Medicamento tm ON m.Tratamiento_Medicamento_ID = tm.ID
 JOIN Tratamientos t ON tm.Tratamientos_ID_Tratamientos = t.ID_Tratamientos;
 
+SELECT 
+    pa.ID_Paciente,
+    per.Nombre,
+    per.Apellido,
+    pa.Rut,
+    pa.Direccion,
+    per.Telefono
+FROM 
+    Paciente pa
+JOIN Persona per ON pa.ID_Persona = per.ID_Persona;
+
+SHOW CREATE TABLE Paciente;
 
 
