@@ -15,7 +15,7 @@ def carga_fact_citas(dw_cursor, dw_conn):
     try:
         query = """
         INSERT INTO Hechos_Citas (
-            cita_id, paciente_id, doctor_id, fecha_id, tratamiento_id, costo, estado
+            cita_id, paciente_id, doctor_id, fecha_id, tratamiento_id, costo, estado, motivo
         )
         SELECT
             c.ID_Cita,
@@ -29,22 +29,24 @@ def carga_fact_citas(dw_cursor, dw_conn):
                 WHEN LOWER(c.Estado) = 'pendiente' THEN 'agendada'
                 WHEN LOWER(c.Estado) IN ('cancelada', 'no_asistio') THEN LOWER(c.Estado)
                 ELSE 'agendada'
-            END
+            END,
+            c.Motivo
         FROM clinica_db.Cita c
         JOIN clinica_db.Ficha_Consulta fc ON fc.ID_Ficha_Consulta = c.ID_Ficha_Consulta
         LEFT JOIN clinica_db.Facturas f ON f.Doctores_ID_Doctor = c.ID_Doctor
         LEFT JOIN clinica_db.Tratamientos t ON t.Doctores_ID_Doctor = c.ID_Doctor
-        GROUP BY c.ID_Cita, fc.ID_Paciente, c.ID_Doctor, c.Fecha, t.ID_Tratamientos, c.Estado
+        GROUP BY c.ID_Cita, fc.ID_Paciente, c.ID_Doctor, c.Fecha, t.ID_Tratamientos, c.Estado, c.Motivo
         ON DUPLICATE KEY UPDATE
             costo = VALUES(costo),
             estado = VALUES(estado),
-            tratamiento_id = VALUES(tratamiento_id);
+            tratamiento_id = VALUES(tratamiento_id),
+            motivo = VALUES(motivo);
         """
         dw_cursor.execute(query)
         dw_conn.commit()
-        print(" Hechos_Citas cargadas correctamente.")
+        print("✅ Hechos_Citas cargadas correctamente.")
     except Error as err:
-        print(f" Error en Hechos_Citas: {err}")
+        print(f"❌ Error en Hechos_Citas: {err}")
 
 def insertar_nueva_cita(source_cursor, source_conn):
     try:
