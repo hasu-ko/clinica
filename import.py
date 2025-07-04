@@ -4,6 +4,7 @@ import re
 from datetime import datetime
 
 
+
 def ejecutar_query(cursor, query, descripcion=""):
     try:
         cursor.execute(query)
@@ -49,97 +50,119 @@ def carga_fact_citas(dw_cursor, dw_conn):
         print(f"❌ Error en Hechos_Citas: {err}")
 
 def insertar_nueva_cita(source_cursor, source_conn):
-    try:
-        print("=== Insertar Nueva Cita ===")
+    while True:
+        print("\n==============================")
+        print("🆕 Insertar Nueva Cita")
+        print("==============================")
 
         # Validar ID_Cita único
         while True:
-            id_cita = input("ID de la cita (número): ")
+            id_cita = input("🔢 ID de la cita (número): ").strip()
             if not id_cita.isdigit():
-                print("El ID debe ser un número.")
+                print("❌ El ID debe ser un número.")
                 continue
 
             source_cursor.execute("SELECT 1 FROM Cita WHERE ID_Cita = %s", (id_cita,))
             if source_cursor.fetchone():
-                print("Esa ID de cita ya existe.")
+                print("⚠️ Esa ID de cita ya existe.")
             else:
                 break
 
         # Validar ID_Paciente existente
         while True:
-            id_paciente = input("ID del paciente: ")
+            id_paciente = input("👤 ID del paciente: ").strip()
             if not id_paciente.isdigit():
-                print("El ID del paciente debe ser numérico.")
+                print("❌ El ID del paciente debe ser numérico.")
                 continue
             source_cursor.execute("SELECT 1 FROM Paciente WHERE ID_Paciente = %s", (id_paciente,))
             if not source_cursor.fetchone():
-                print("No se encontró ese paciente.")
+                print("⚠️ No se encontró ese paciente.")
             else:
                 break
 
         # Validar ID_Doctor existente
         while True:
-            id_doctor = input("ID del doctor: ")
+            id_doctor = input("🩺 ID del doctor: ").strip()
             if not id_doctor.isdigit():
-                print("El ID del doctor debe ser numérico.")
+                print("❌ El ID del doctor debe ser numérico.")
                 continue
             source_cursor.execute("SELECT 1 FROM Doctores WHERE ID_Doctor = %s", (id_doctor,))
             if not source_cursor.fetchone():
-                print("No se encontró ese doctor.")
+                print("⚠️ No se encontró ese doctor.")
             else:
                 break
 
-        # Validar fecha
-        while True:
-            fecha_input = input("Fecha (YYYY/MM/DD o YYYY-MM-DD): ")
-            try:
-                # Reemplaza guiones por slashes para estandarizar
-                fecha_input = fecha_input.replace("-", "/")
-                # Convierte la fecha al objeto datetime
-                fecha_obj = datetime.strptime(fecha_input, '%Y/%m/%d')
-                # Reconvierte al formato YYYYMMDD como string
-                fecha = fecha_obj.strftime('%Y%m%d')
-                break
-            except ValueError:
-                print("❌ Fecha inválida. Usa formato válido como 2021/12/02 o 2021-12-02.")
+        try:
+            # Validar Fecha
+            while True:
+                fecha_input = input("📅 Fecha (YYYY/MM/DD o YYYY-MM-DD): ").strip()
+                try:
+                    fecha_input = fecha_input.replace("-", "/")
+                    fecha_obj = datetime.strptime(fecha_input, '%Y/%m/%d')
 
-        # Validar estado
-        estados_validos = ['atendida', 'pendiente', 'cancelada', 'no_asistio']
-        while True:
-            estado = input("Estado (atendida/pendiente/cancelada/no_asistio): ").lower()
-            if estado not in estados_validos:
-                print("Estado no válido.")
-            else:
-                break
+                    if not (1900 <= fecha_obj.year <= 2100):
+                        raise ValueError("⚠️ Año fuera del rango permitido (1900–2100)")
 
-        motivo = input("Motivo de la cita: ")
+                    fecha = fecha_obj.strftime('%Y%m%d')  # Para la DB
+                    fecha_mostrada = fecha_obj.strftime('%d/%m/%Y')  # Para mostrar
+                    print(f"\n✅ Fecha válida: {fecha_mostrada}\n")
+                    break
 
-        # 1. Insertar Ficha_Consulta
-        source_cursor.execute("""
-            INSERT INTO Ficha_Consulta (ID_Paciente)
-            VALUES (%s)
-        """, (id_paciente,))
-        source_conn.commit()
+                except ValueError as e:
+                    print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+                    print("❌ Fecha inválida.")
+                    print(f"📌 Detalle: {e}")
+                    print("📌 Usa formato: 2024/07/04 o 2024-07-04")
+                    print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
 
-        # 2. Obtener el ID de ficha recién insertado
-        source_cursor.execute("SELECT LAST_INSERT_ID()")
-        id_ficha = source_cursor.fetchone()[0]
+            # Validar Estado
+            estados_validos = ['atendida', 'pendiente', 'cancelada', 'no_asistio']
+            while True:
+                estado = input("📌 Estado (atendida/pendiente/cancelada/no_asistio): ").lower().strip()
+                if estado not in estados_validos:
+                    print("❌ Estado no válido. Opciones: atendida, pendiente, cancelada, no_asistio.")
+                else:
+                    break
 
-        # 2. Obtener ID_Ficha_Consulta generado
-        source_cursor.execute("SELECT LAST_INSERT_ID();")
-        id_ficha = source_cursor.fetchone()[0]
+            # Motivo
+            motivo = input("📝 Motivo de la cita: ").strip()
 
-        # 3. Insertar Cita con ID_Ficha_Consulta
-        source_cursor.execute("""
-            INSERT INTO Cita (ID_Cita, Fecha, Motivo, Estado, ID_Doctor, ID_Ficha_Consulta)
-            VALUES (%s, %s, %s, %s, %s, %s)
-        """, (id_cita, fecha, motivo, estado, id_doctor, id_ficha))
-        source_conn.commit()
+            # Insertar Ficha_Consulta
+            source_cursor.execute("""
+                INSERT INTO Ficha_Consulta (ID_Paciente)
+                VALUES (%s)
+            """, (id_paciente,))
+            source_conn.commit()
 
-        print("✅ Cita insertada correctamente con ficha asociada.")
+            # Obtener ID_Ficha_Consulta generado
+            source_cursor.execute("SELECT LAST_INSERT_ID();")
+            id_ficha = source_cursor.fetchone()[0]
 
-    except Error as e:
-        print(f"Error al insertar la cita: {e}")
+            # Insertar Cita
+            source_cursor.execute("""
+                INSERT INTO Cita (ID_Cita, Fecha, Motivo, Estado, ID_Doctor, ID_Ficha_Consulta)
+                VALUES (%s, %s, %s, %s, %s, %s)
+            """, (id_cita, fecha, motivo, estado, id_doctor, id_ficha))
+            source_conn.commit()
+
+            print("\n✅ Cita insertada correctamente con ficha asociada.")
+            print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+
+            # ¿Desea continuar?
+            while True:
+                continuar = input("🔁 ¿Deseas insertar otra cita? (sí/no): ").strip().lower()
+                if continuar in ['sí', 'si', 's']:
+                    break  # vuelve al inicio del while True principal
+                elif continuar in ['no', 'n']:
+                    print("\n👋 Saliendo del sistema. ¡Hasta luego!\n")
+                    return
+                else:
+                    print("❌ Opción no válida. Escribe 'sí' o 'no'.")
+
+        except Error as e:
+            print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+            print(f"❌ Error al insertar la cita: {e}")
+            print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
 
 def main():
     source_conn = None
