@@ -246,7 +246,7 @@ def main():
         dw_conn.commit()
 
     except Error as e:
-        print(f"Error general: {e}")
+        print(f"Error generaldo: {e}")
 
     finally:
         if source_cursor:
